@@ -64,6 +64,7 @@ export const SellModal: React.FC<SellModalProps> = ({ isOpen, onClose, onSuccess
   const [brand, setBrand] = useState('');
   const [deliveryMethod, setDeliveryMethod] = useState<'PICKUP_ONLY' | 'PICKUP_OR_DELIVERY'>('PICKUP_OR_DELIVERY');
   const [pickupLocation, setPickupLocation] = useState('');
+  const [isNegotiable, setIsNegotiable] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +140,7 @@ export const SellModal: React.FC<SellModalProps> = ({ isOpen, onClose, onSuccess
         brand: brand.trim() || null,
         allowedDeliveryMethod: deliveryMethod,
         pickupLocation: pickupLocation.trim() || null,
+        isNegotiable,
         photos,
       });
 
@@ -322,6 +324,27 @@ export const SellModal: React.FC<SellModalProps> = ({ isOpen, onClose, onSuccess
             onChange={setPriceRupiah}
             helperText="Harga yang akan dilihat dan dibayar oleh pembeli."
           />
+
+          {/* Nego Harga Checkbox */}
+          <label className="flex items-start gap-3 p-3 rounded-xl bg-white dark:bg-slate-800 border border-brand-border dark:border-slate-700 cursor-pointer hover:border-brand-blue-400 dark:hover:border-slate-600 transition-colors">
+            <input
+              type="checkbox"
+              checked={isNegotiable}
+              onChange={(e) => setIsNegotiable(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-blue-600 focus:ring-brand-blue-500 cursor-pointer shrink-0"
+            />
+            <div className="select-none">
+              <span className="block text-xs font-bold text-brand-text-primary dark:text-slate-100 flex items-center gap-1.5">
+                <span>Izinkan Calon Pembeli Nego Harga</span>
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-bold px-1.5 py-0.5 rounded">
+                  Bisa Nego
+                </span>
+              </span>
+              <span className="block text-[11px] text-brand-text-secondary dark:text-slate-400 mt-0.5 leading-snug">
+                Tombol "Nego Harga" akan tampil di barang Anda. Anda dapat menyetujui atau menolak tawaran harga yang diajukan pembeli.
+              </span>
+            </div>
+          </label>
 
           <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-brand-border/80 dark:border-slate-700 space-y-2 text-xs">
             <div className="flex justify-between text-brand-text-secondary dark:text-slate-400">

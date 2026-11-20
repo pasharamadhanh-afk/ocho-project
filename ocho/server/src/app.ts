@@ -13,6 +13,7 @@ import { ordersRouter } from './routes/orders';
 import { reviewsRouter } from './routes/reviews';
 import { payoutsRouter } from './routes/payouts';
 import { reportsRouter } from './routes/reports';
+import { offersRouter } from './routes/offers';
 import { adminRouter } from './routes/admin';
 import { openApiSpec } from './docs/openapi';
 
@@ -43,6 +44,7 @@ export function createApp(): Express {
   app.use('/api/reviews', reviewsRouter);
   app.use('/api/payouts', payoutsRouter);
   app.use('/api/reports', reportsRouter);
+  app.use('/api/offers', offersRouter);
   app.use('/api/admin', adminRouter);
 
   // API root info

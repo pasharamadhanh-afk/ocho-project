@@ -105,7 +105,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ item, onClick }) => {
         <div className="pt-2 border-t border-brand-border/60 dark:border-slate-800 space-y-2">
           <div className="flex items-baseline justify-between">
             <div>
-              <span className="text-[10px] text-brand-text-secondary dark:text-slate-400 block">Harga Pas</span>
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[10px] text-brand-text-secondary dark:text-slate-400">
+                  {item.isNegotiable ? 'Harga Awal' : 'Harga Pas'}
+                </span>
+                {item.isNegotiable && (
+                  <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-800">
+                    Bisa Nego
+                  </span>
+                )}
+              </div>
               <p className="font-display text-lg font-black text-brand-orange leading-none tabular-nums">
                 {formatRupiah(item.priceRupiah)}
               </p>

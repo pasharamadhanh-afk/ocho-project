@@ -37,6 +37,8 @@ model User {
   sellingItems       Item[]               @relation("SellerItems")
   buyerOrders        Order[]              @relation("BuyerOrders")
   sellerOrders       Order[]              @relation("SellerOrders")
+  buyerOffers        Offer[]              @relation("BuyerOffers")
+  sellerOffers       Offer[]              @relation("SellerOffers")
   reviewsWritten     Review[]             @relation("BuyerReviews")
   reviewsReceived    Review[]             @relation("SellerReviews")
   balanceEntries     SellerBalanceEntry[]
@@ -80,9 +82,11 @@ model Item {
   brand                 String?
   allowedDeliveryMethod String      @default("PICKUP_OR_DELIVERY") // PICKUP_ONLY, PICKUP_OR_DELIVERY
   pickupLocation        String?
+  isNegotiable          Boolean     @default(false)
   status                String      @default("ACTIVE") // ACTIVE, RESERVED, SOLD, ARCHIVED
   photos                ItemPhoto[]
   orders                Order[]
+  offers                Offer[]
   reports               Report[]
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
@@ -127,6 +131,7 @@ model Order {
   // PENDING_PAYMENT, PAID, PROCESSING, READY_FOR_PICKUP, ON_DELIVERY, COMPLETED, CANCELLED, DISPUTED
   reservedUntil      DateTime?
   notes              String?
+  offerId            String?
   paymentProofUrl    String?
   payment            Payment?
   review             Review?
@@ -232,4 +237,25 @@ model OrderMessage {
 
   @@index([orderId])
   @@index([senderId])
+}
+
+model Offer {
+  id               String   @id @default(uuid())
+  itemId           String
+  item             Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  buyerId          String
+  buyer            User     @relation("BuyerOffers", fields: [buyerId], references: [id])
+  sellerId         String
+  seller           User     @relation("SellerOffers", fields: [sellerId], references: [id])
+  offerPriceRupiah Int
+  message          String?
+  status           String   @default("PENDING") // PENDING, ACCEPTED, REJECTED, CANCELLED, COMPLETED
+  sellerNote       String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([itemId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
 }

@@ -79,6 +79,7 @@ const createItemSchema = z.object({
   brand: z.string().max(50).optional().nullable(),
   allowedDeliveryMethod: z.enum(['PICKUP_ONLY', 'PICKUP_OR_DELIVERY']).default('PICKUP_OR_DELIVERY'),
   pickupLocation: z.string().max(200).optional().nullable(),
+  isNegotiable: z.boolean().optional().default(false),
   photos: z.array(z.string().min(1)).max(6, 'Maksimal 6 foto').optional().default([]),
 });
 
@@ -341,6 +342,7 @@ itemsRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respon
         brand: body.brand ? body.brand.trim() : null,
         allowedDeliveryMethod: allowedDelivery,
         pickupLocation: body.pickupLocation ? body.pickupLocation.trim() : null,
+        isNegotiable: body.isNegotiable || false,
         status: 'ACTIVE',
         photos: {
           create: photoUrls.map((url, idx) => ({
@@ -421,6 +423,7 @@ itemsRouter.patch('/:id', requireAuth, async (req: AuthenticatedRequest, res: Re
         ...(body.brand !== undefined && { brand: body.brand }),
         ...(body.allowedDeliveryMethod && { allowedDeliveryMethod: body.allowedDeliveryMethod }),
         ...(body.pickupLocation !== undefined && { pickupLocation: body.pickupLocation }),
+        ...(body.isNegotiable !== undefined && { isNegotiable: body.isNegotiable }),
       },
       include: {
         category: true,

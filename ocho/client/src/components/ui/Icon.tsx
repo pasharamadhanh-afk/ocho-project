@@ -45,6 +45,8 @@ import {
   PaperPlaneRight,
   Sun,
   Moon,
+  Tag,
+  Handshake,
   IconProps as PhosphorIconProps,
 } from '@phosphor-icons/react';
 
@@ -93,6 +95,8 @@ export type IconName =
   | 'PaperPlaneRight'
   | 'Sun'
   | 'Moon'
+  | 'Tag'
+  | 'Handshake'
   | 'Spinner';
 
 const iconComponentMap: Record<IconName, React.ComponentType<PhosphorIconProps>> = {
@@ -140,6 +144,8 @@ const iconComponentMap: Record<IconName, React.ComponentType<PhosphorIconProps>>
   PaperPlaneRight,
   Sun,
   Moon,
+  Tag,
+  Handshake,
   Spinner: CircleNotch,
 };
 

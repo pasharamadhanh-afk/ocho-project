@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   OrderItem,
   OrderMessageItem,
+  OfferItem,
   fetchOrders,
   confirmOrderReceived,
   confirmOrderPayment,
@@ -9,6 +10,9 @@ import {
   submitReview,
   fetchOrderMessages,
   sendOrderMessage,
+  fetchMyOffers,
+  respondToOffer,
+  cancelOffer,
 } from '../services/api';
 import { getStoredUser } from '../services/auth';
 import { formatRupiah, formatDateTime } from '../utils/format';
@@ -21,14 +25,21 @@ import { Icon } from '../components/ui/Icon';
 interface OrdersPageProps {
   onBackToHome: () => void;
   onViewItem: (itemId: string) => void;
+  onCheckoutOffer?: (item: any, offerId: string, offerPrice: number) => void;
 }
 
-export const OrdersPage: React.FC<OrdersPageProps> = ({ onBackToHome, onViewItem }) => {
+export const OrdersPage: React.FC<OrdersPageProps> = ({ onBackToHome, onViewItem, onCheckoutOffer }) => {
   const currentUser = getStoredUser();
-  const [roleTab, setRoleTab] = useState<'buyer' | 'seller'>('buyer');
+  const [roleTab, setRoleTab] = useState<'buyer' | 'seller' | 'offers'>('buyer');
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Offers State
+  const [offersSubTab, setOffersSubTab] = useState<'seller' | 'buyer'>('seller');
+  const [offersData, setOffersData] = useState<{ asBuyer: OfferItem[]; asSeller: OfferItem[] }>({ asBuyer: [], asSeller: [] });
+  const [offersLoading, setOffersLoading] = useState(false);
+  const [offersError, setOffersError] = useState<string | null>(null);
 
   // QRIS Payment Modal State
   const [selectedPaymentOrder, setSelectedPaymentOrder] = useState<OrderItem | null>(null);
@@ -52,6 +63,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ onBackToHome, onViewItem
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const loadOrders = async () => {
+    if (roleTab === 'offers') return;
     setLoading(true);
     setError(null);
     try {
@@ -64,9 +76,63 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ onBackToHome, onViewItem
     }
   };
 
+  const loadOffers = async () => {
+    setOffersLoading(true);
+    setOffersError(null);
+    try {
+      const data = await fetchMyOffers();
+      setOffersData(data);
+    } catch (err: any) {
+      setOffersError(err.message || 'Gagal memuat tawaran nego');
+    } finally {
+      setOffersLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadOrders();
+    if (roleTab === 'offers') {
+      loadOffers();
+    } else {
+      loadOrders();
+    }
   }, [roleTab]);
+
+  const handleRespondOffer = async (offerId: string, action: 'ACCEPT' | 'REJECT') => {
+    try {
+      await respondToOffer(offerId, action);
+      await loadOffers();
+    } catch (err: any) {
+      alert(err.message || 'Gagal merespons tawaran nego');
+    }
+  };
+
+  const handleCancelOffer = async (offerId: string) => {
+    if (!confirm('Batalkan tawaran nego ini?')) return;
+    try {
+      await cancelOffer(offerId);
+      await loadOffers();
+    } catch (err: any) {
+      alert(err.message || 'Gagal membatalkan tawaran');
+    }
+  };
+
+  const handleCheckoutOffer = (offer: OfferItem) => {
+    if (onCheckoutOffer) {
+      onCheckoutOffer(
+        {
+          id: offer.item.id,
+          title: offer.item.title,
+          priceRupiah: offer.offerPriceRupiah,
+          photos: offer.item.photos,
+          seller: offer.seller || { id: offer.sellerId, name: 'Penjual', isVerified: true },
+          allowedDeliveryMethod: 'PICKUP_OR_DELIVERY',
+          status: 'ACTIVE',
+        },
+        offer.id,
+        offer.offerPriceRupiah
+      );
+    }
+  };
 
   const handleProofFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -221,32 +287,332 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({ onBackToHome, onViewItem
         </div>
 
         {/* Role Toggle Tabs */}
-        <div className="flex bg-brand-surface dark:bg-slate-800 p-1 rounded-2xl border border-brand-border dark:border-slate-700">
+        <div className="flex bg-brand-surface dark:bg-slate-800 p-1 rounded-2xl border border-brand-border dark:border-slate-700 flex-wrap gap-1">
           <button
             onClick={() => setRoleTab('buyer')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all ${
               roleTab === 'buyer'
                 ? 'bg-white dark:bg-slate-900 shadow-xs text-brand-blue-600 dark:text-brand-blue-400'
                 : 'text-brand-text-secondary dark:text-slate-400 hover:text-brand-text-primary dark:hover:text-slate-200'
             }`}
           >
-            Belanjaan Saya (Pembeli)
+            Belanjaan Saya
           </button>
           <button
             onClick={() => setRoleTab('seller')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all ${
               roleTab === 'seller'
                 ? 'bg-white dark:bg-slate-900 shadow-xs text-brand-blue-600 dark:text-brand-blue-400'
                 : 'text-brand-text-secondary dark:text-slate-400 hover:text-brand-text-primary dark:hover:text-slate-200'
             }`}
           >
-            Penjualan Saya (Penjual)
+            Penjualan Saya
+          </button>
+          <button
+            onClick={() => setRoleTab('offers')}
+            className={`px-3 sm:px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+              roleTab === 'offers'
+                ? 'bg-white dark:bg-slate-900 shadow-xs text-emerald-600 dark:text-emerald-400'
+                : 'text-brand-text-secondary dark:text-slate-400 hover:text-brand-text-primary dark:hover:text-slate-200'
+            }`}
+          >
+            <Icon name="Tag" size={14} />
+            <span>Tawaran Nego</span>
+            {(offersData.asSeller.filter((o) => o.status === 'PENDING').length > 0 ||
+              offersData.asBuyer.filter((o) => o.status === 'ACCEPTED').length > 0) && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Orders List */}
-      {loading ? (
+      {roleTab === 'offers' ? (
+        <div className="space-y-6">
+          {/* Subtabs: Masuk vs Saya */}
+          <div className="flex items-center gap-2 border-b border-brand-border/60 dark:border-slate-800 pb-3">
+            <button
+              onClick={() => setOffersSubTab('seller')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+                offersSubTab === 'seller'
+                  ? 'bg-brand-blue-50 dark:bg-brand-blue-950/60 text-brand-blue-700 dark:text-brand-blue-300 border border-brand-blue-200 dark:border-brand-blue-800 shadow-xs'
+                  : 'text-brand-text-secondary dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <span>Tawaran Masuk (Sebagai Penjual)</span>
+              {offersData.asSeller.filter((o) => o.status === 'PENDING').length > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {offersData.asSeller.filter((o) => o.status === 'PENDING').length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setOffersSubTab('buyer')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+                offersSubTab === 'buyer'
+                  ? 'bg-brand-blue-50 dark:bg-brand-blue-950/60 text-brand-blue-700 dark:text-brand-blue-300 border border-brand-blue-200 dark:border-brand-blue-800 shadow-xs'
+                  : 'text-brand-text-secondary dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800'
+              }`}
+            >
+              <span>Tawaran Saya (Sebagai Pembeli)</span>
+              {offersData.asBuyer.filter((o) => o.status === 'ACCEPTED').length > 0 && (
+                <span className="bg-emerald-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {offersData.asBuyer.filter((o) => o.status === 'ACCEPTED').length} Siap Beli
+                </span>
+              )}
+            </button>
+          </div>
+
+          {offersLoading ? (
+            <div className="space-y-4">
+              {[1, 2].map((n) => (
+                <div key={n} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-brand-border dark:border-slate-800 animate-pulse space-y-3">
+                  <div className="h-4 bg-gray-200 dark:bg-slate-800 rounded w-1/4"></div>
+                  <div className="h-16 bg-gray-100 dark:bg-slate-800/60 rounded-xl"></div>
+                </div>
+              ))}
+            </div>
+          ) : offersError ? (
+            <div className="bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-6 rounded-2xl text-center space-y-2">
+              <Icon name="WarningCircle" size={24} className="mx-auto text-red-500" />
+              <p className="text-sm font-bold">{offersError}</p>
+              <Button variant="outline" size="sm" onClick={loadOffers}>Coba Lagi</Button>
+            </div>
+          ) : offersSubTab === 'seller' ? (
+            offersData.asSeller.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-brand-border dark:border-slate-800 p-12 text-center space-y-3 shadow-card">
+                <div className="w-16 h-16 rounded-full bg-brand-surface dark:bg-slate-800 text-brand-text-secondary dark:text-slate-400 flex items-center justify-center mx-auto border border-brand-border dark:border-slate-700">
+                  <Icon name="Tag" size={24} />
+                </div>
+                <h3 className="font-display font-bold text-base text-brand-text-primary dark:text-slate-100">
+                  Belum Ada Tawaran Nego Masuk
+                </h3>
+                <p className="text-xs text-brand-text-secondary dark:text-slate-400 max-w-sm mx-auto">
+                  Tawaran harga dari calon pembeli untuk barang yang Anda buka opsi negonya akan muncul di sini.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {offersData.asSeller.map((offer) => (
+                  <div
+                    key={offer.id}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-brand-border dark:border-slate-800 p-5 shadow-card space-y-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border/60 dark:border-slate-800 pb-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-brand-text-primary dark:text-slate-200">
+                          Dari: @{offer.buyer?.username || offer.buyer?.name || 'Mahasiswa'}
+                        </span>
+                        <span className="text-brand-text-secondary dark:text-slate-500">&bull;</span>
+                        <span className="text-brand-text-secondary dark:text-slate-400">
+                          {formatDateTime(offer.createdAt)}
+                        </span>
+                      </div>
+                      <div>
+                        {offer.status === 'PENDING' && (
+                          <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Menunggu Persetujuan Anda
+                          </span>
+                        )}
+                        {offer.status === 'ACCEPTED' && (
+                          <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Tawaran Diterima
+                          </span>
+                        )}
+                        {offer.status === 'REJECTED' && (
+                          <span className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Tawaran Ditolak
+                          </span>
+                        )}
+                        {offer.status === 'COMPLETED' && (
+                          <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Sudah Dibeli & Selesai
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-4">
+                      {offer.item.photos[0]?.url && (
+                        <img
+                          src={offer.item.photos[0].url}
+                          alt=""
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-brand-border shrink-0 cursor-pointer"
+                          onClick={() => onViewItem(offer.itemId)}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h4
+                          className="font-display font-bold text-sm text-brand-text-primary dark:text-slate-100 truncate cursor-pointer hover:text-brand-blue-600"
+                          onClick={() => onViewItem(offer.itemId)}
+                        >
+                          {offer.item.title}
+                        </h4>
+                        <div className="flex items-baseline gap-2 pt-1 flex-wrap">
+                          <span className="text-xs text-brand-text-secondary dark:text-slate-400 line-through">
+                            {formatRupiah(offer.item.priceRupiah)}
+                          </span>
+                          <span className="font-display font-black text-base text-emerald-600 dark:text-emerald-400">
+                            Tawaran: {formatRupiah(offer.offerPriceRupiah)}
+                          </span>
+                          <span className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-1.5 py-0.2 rounded font-bold">
+                            Hemat {formatRupiah(offer.item.priceRupiah - offer.offerPriceRupiah)}
+                          </span>
+                        </div>
+                        {offer.message && (
+                          <p className="text-xs italic text-brand-text-secondary dark:text-slate-400 bg-brand-surface dark:bg-slate-800 p-2 rounded-lg mt-1 border border-brand-border/60 dark:border-slate-700">
+                            "{offer.message}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {offer.status === 'PENDING' && (
+                      <div className="flex justify-end gap-2 pt-2 border-t border-brand-border/60 dark:border-slate-800">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRespondOffer(offer.id, 'REJECT')}
+                        >
+                          Tolak Tawaran
+                        </Button>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleRespondOffer(offer.id, 'ACCEPT')}
+                        >
+                          Terima Tawaran ({formatRupiah(offer.offerPriceRupiah)})
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            offersData.asBuyer.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-brand-border dark:border-slate-800 p-12 text-center space-y-3 shadow-card">
+                <div className="w-16 h-16 rounded-full bg-brand-surface dark:bg-slate-800 text-brand-text-secondary dark:text-slate-400 flex items-center justify-center mx-auto border border-brand-border dark:border-slate-700">
+                  <Icon name="Tag" size={24} />
+                </div>
+                <h3 className="font-display font-bold text-base text-brand-text-primary dark:text-slate-100">
+                  Belum Ada Tawaran Nego yang Anda Ajukan
+                </h3>
+                <p className="text-xs text-brand-text-secondary dark:text-slate-400 max-w-sm mx-auto">
+                  Anda dapat mengajukan penawaran harga untuk barang yang memiliki label "Bisa Nego".
+                </p>
+                <Button variant="primary" size="sm" onClick={onBackToHome}>
+                  Cari Barang Sekarang
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {offersData.asBuyer.map((offer) => (
+                  <div
+                    key={offer.id}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-brand-border dark:border-slate-800 p-5 shadow-card space-y-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-brand-border/60 dark:border-slate-800 pb-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-brand-text-primary dark:text-slate-200">
+                          Penjual: @{offer.seller?.username || offer.seller?.name || 'Mahasiswa'}
+                        </span>
+                        <span className="text-brand-text-secondary dark:text-slate-500">&bull;</span>
+                        <span className="text-brand-text-secondary dark:text-slate-400">
+                          {formatDateTime(offer.createdAt)}
+                        </span>
+                      </div>
+                      <div>
+                        {offer.status === 'PENDING' && (
+                          <span className="bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Menunggu Respons Penjual
+                          </span>
+                        )}
+                        {offer.status === 'ACCEPTED' && (
+                          <span className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Tawaran Disetujui!
+                          </span>
+                        )}
+                        {offer.status === 'REJECTED' && (
+                          <span className="bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Tawaran Ditolak
+                          </span>
+                        )}
+                        {offer.status === 'COMPLETED' && (
+                          <span className="bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800 text-xs font-bold px-2 py-0.5 rounded-lg">
+                            Sudah Dipesan
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-4">
+                      {offer.item.photos[0]?.url && (
+                        <img
+                          src={offer.item.photos[0].url}
+                          alt=""
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-brand-border shrink-0 cursor-pointer"
+                          onClick={() => onViewItem(offer.itemId)}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <h4
+                          className="font-display font-bold text-sm text-brand-text-primary dark:text-slate-100 truncate cursor-pointer hover:text-brand-blue-600"
+                          onClick={() => onViewItem(offer.itemId)}
+                        >
+                          {offer.item.title}
+                        </h4>
+                        <div className="flex items-baseline gap-2 pt-1 flex-wrap">
+                          <span className="text-xs text-brand-text-secondary dark:text-slate-400 line-through">
+                            {formatRupiah(offer.item.priceRupiah)}
+                          </span>
+                          <span className="font-display font-black text-base text-emerald-600 dark:text-emerald-400">
+                            Tawaran Kamu: {formatRupiah(offer.offerPriceRupiah)}
+                          </span>
+                        </div>
+                        {offer.message && (
+                          <p className="text-xs italic text-brand-text-secondary dark:text-slate-400 bg-brand-surface dark:bg-slate-800 p-2 rounded-lg mt-1 border border-brand-border/60 dark:border-slate-700">
+                            "{offer.message}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-brand-border/60 dark:border-slate-800">
+                      {offer.status === 'PENDING' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelOffer(offer.id)}
+                        >
+                          Batalkan Tawaran
+                        </Button>
+                      )}
+                      {offer.status === 'ACCEPTED' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleCheckoutOffer(offer)}
+                        >
+                          Beli Sekarang dengan Harga Nego ({formatRupiah(offer.offerPriceRupiah)})
+                        </Button>
+                      )}
+                      {offer.status === 'REJECTED' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onViewItem(offer.itemId)}
+                        >
+                          Lihat Barang
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      ) : loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((n) => (
             <div key={n} className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-brand-border dark:border-slate-800 animate-pulse space-y-3">

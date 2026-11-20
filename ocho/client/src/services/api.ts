@@ -36,6 +36,7 @@ export interface ItemSummary {
   brand: string | null;
   allowedDeliveryMethod: 'PICKUP_ONLY' | 'PICKUP_OR_DELIVERY';
   pickupLocation: string | null;
+  isNegotiable?: boolean;
   status: 'ACTIVE' | 'RESERVED' | 'SOLD' | 'ARCHIVED';
   createdAt: string;
   category: {
@@ -266,6 +267,7 @@ export async function createItem(payload: {
   brand?: string | null;
   allowedDeliveryMethod: 'PICKUP_ONLY' | 'PICKUP_OR_DELIVERY';
   pickupLocation?: string | null;
+  isNegotiable?: boolean;
   photos: string[];
 }): Promise<ItemDetail> {
   const res = await fetch(`${API_BASE}/items`, {
@@ -306,6 +308,7 @@ export async function createOrder(payload: {
   deliveryDate?: string | null;
   buyerPhone: string;
   notes?: string | null;
+  offerId?: string | null;
 }): Promise<OrderItem> {
   const res = await fetch(`${API_BASE}/orders`, {
     method: 'POST',
@@ -540,4 +543,85 @@ export async function updateAdminPayout(payoutId: string, status: string, adminN
     body: JSON.stringify({ status, adminNotes }),
   });
   if (!res.ok) throw new Error('Gagal memproses pencairan');
+}
+
+export interface OfferItem {
+  id: string;
+  itemId: string;
+  buyerId: string;
+  sellerId: string;
+  offerPriceRupiah: number;
+  message: string | null;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
+  sellerNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  item: {
+    id: string;
+    title: string;
+    priceRupiah: number;
+    status: string;
+    photos: Array<{ id: string; url: string }>;
+  };
+  buyer?: {
+    id: string;
+    name: string;
+    username: string | null;
+    phone: string | null;
+  };
+  seller?: {
+    id: string;
+    name: string;
+    username: string | null;
+  };
+}
+
+export async function createOffer(payload: {
+  itemId: string;
+  offerPriceRupiah: number;
+  message?: string | null;
+}): Promise<OfferItem> {
+  const res = await fetch(`${API_BASE}/offers`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'Gagal mengirim tawaran');
+  return json.data;
+}
+
+export async function fetchMyOffers(): Promise<{ asBuyer: OfferItem[]; asSeller: OfferItem[] }> {
+  const res = await fetch(`${API_BASE}/offers/my`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error('Gagal memuat daftar tawaran nego');
+  const json = await res.json();
+  return json.data;
+}
+
+export async function respondToOffer(
+  offerId: string,
+  action: 'ACCEPT' | 'REJECT',
+  sellerNote?: string
+): Promise<OfferItem> {
+  const res = await fetch(`${API_BASE}/offers/${encodeURIComponent(offerId)}/respond`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ action, sellerNote }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'Gagal merespons tawaran');
+  return json.data;
+}
+
+export async function cancelOffer(offerId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/offers/${encodeURIComponent(offerId)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) {
+    const json = await res.json();
+    throw new Error(json.message || 'Gagal membatalkan tawaran');
+  }
 }

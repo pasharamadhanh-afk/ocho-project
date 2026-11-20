@@ -6,22 +6,28 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { Card } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
+import { OfferModal } from '../components/ui/OfferModal';
 
 export interface ItemDetailPageProps {
   itemId: string;
   onBack: () => void;
   onCheckoutClick?: (item: ItemDetail, deliveryMethod: 'PICKUP' | 'DELIVERY', paymentMethod: 'QRIS' | 'COD') => void;
+  currentUserId?: string | null;
+  onRequireLogin?: () => void;
 }
 
 export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
   itemId,
   onBack,
   onCheckoutClick,
+  currentUserId,
+  onRequireLogin,
 }) => {
   const [item, setItem] = useState<ItemDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number>(0);
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState<boolean>(false);
 
   // Business config
   const [config, setConfig] = useState<BusinessConfig | null>(null);
@@ -338,13 +344,20 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
                 {item.title}
               </h1>
 
-              <div className="flex items-baseline gap-2 pt-1">
+              <div className="flex items-baseline gap-2 pt-1 flex-wrap">
                 <span className="font-display font-black text-3xl text-brand-orange">
                   {formatRupiah(item.priceRupiah)}
                 </span>
-                <span className="text-xs font-semibold text-brand-text-secondary dark:text-slate-400">
-                  (Harga pas, tanpa biaya admin pembeli)
-                </span>
+                {item.isNegotiable ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 rounded-lg border border-emerald-300 dark:border-emerald-800">
+                    <Icon name="Tag" size={14} />
+                    <span>Bisa Nego Harga</span>
+                  </span>
+                ) : (
+                  <span className="text-xs font-semibold text-brand-text-secondary dark:text-slate-400">
+                    (Harga pas, tanpa biaya admin pembeli)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -564,23 +577,43 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
               </div>
             </div>
 
-            {/* Sticky CTA Button */}
-            <div>
+            {/* Sticky CTA Buttons */}
+            <div className="space-y-2.5">
               {isAvailable ? (
-                <Button
-                  variant="primary"
-                  size="lg"
-                  className="w-full justify-center text-base py-3.5 rounded-2xl shadow-md"
-                  onClick={() => {
-                    if (onCheckoutClick) {
-                      onCheckoutClick(item, deliveryMethod, paymentMethod);
-                    } else {
-                      alert(`Melanjutkan checkout untuk ${item.title} dengan metode ${deliveryMethod} dan pembayaran ${paymentMethod}.`);
-                    }
-                  }}
-                >
-                  Beli Sekarang &bull; {formatRupiah(buyerTotal)}
-                </Button>
+                <>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full justify-center text-base py-3.5 rounded-2xl shadow-md"
+                    onClick={() => {
+                      if (onCheckoutClick) {
+                        onCheckoutClick(item, deliveryMethod, paymentMethod);
+                      } else {
+                        alert(`Melanjutkan checkout untuk ${item.title} dengan metode ${deliveryMethod} dan pembayaran ${paymentMethod}.`);
+                      }
+                    }}
+                  >
+                    Beli Sekarang &bull; {formatRupiah(buyerTotal)}
+                  </Button>
+
+                  {item.isNegotiable && item.seller.id !== currentUserId && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full justify-center text-sm py-2.5 rounded-2xl border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                      onClick={() => {
+                        if (!currentUserId && onRequireLogin) {
+                          onRequireLogin();
+                          return;
+                        }
+                        setIsOfferModalOpen(true);
+                      }}
+                    >
+                      <Icon name="Tag" size={18} className="mr-1.5" />
+                      <span>Ajukan Tawaran Nego</span>
+                    </Button>
+                  )}
+                </>
               ) : (
                 <Button
                   variant="secondary"
@@ -665,6 +698,18 @@ export const ItemDetailPage: React.FC<ItemDetailPageProps> = ({
           </form>
         )}
       </Modal>
+
+      {/* Offer / Nego Modal */}
+      {isOfferModalOpen && (
+        <OfferModal
+          isOpen={isOfferModalOpen}
+          onClose={() => setIsOfferModalOpen(false)}
+          item={item}
+          onSuccess={() => {
+            setIsOfferModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 };

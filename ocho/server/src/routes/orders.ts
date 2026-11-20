@@ -19,6 +19,7 @@ const createOrderSchema = z.object({
   deliveryDate: z.string().optional().nullable(),
   buyerPhone: z.string().min(8, 'Nomor WhatsApp minimal 8 karakter').max(20),
   notes: z.string().max(200).optional().nullable(),
+  offerId: z.string().uuid().optional().nullable(),
 });
 
 function generateOrderNumber(): string {
@@ -151,9 +152,22 @@ ordersRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respo
     });
     const isFirstOrder = priorCompletedOrdersCount === 0;
 
+    // 7b. Check if an accepted offer applies to this order
+    let effectiveItemPrice = item.priceRupiah;
+    let validatedOfferId: string | null = null;
+    if (body.offerId) {
+      const offer = await prisma.offer.findUnique({
+        where: { id: body.offerId },
+      });
+      if (offer && offer.itemId === item.id && offer.buyerId === buyer.id && offer.status === 'ACCEPTED') {
+        effectiveItemPrice = offer.offerPriceRupiah;
+        validatedOfferId = offer.id;
+      }
+    }
+
     // 8. Financial calculation (100% integer Rupiah)
     const totals = calculateOrderTotals({
-      itemPriceRupiah: item.priceRupiah,
+      itemPriceRupiah: effectiveItemPrice,
       deliveryMethod: body.deliveryMethod,
       isFirstOrder,
     });
@@ -185,6 +199,14 @@ ordersRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respo
         data: { status: 'RESERVED' },
       });
 
+      // If an accepted offer was used, mark offer COMPLETED
+      if (validatedOfferId) {
+        await tx.offer.update({
+          where: { id: validatedOfferId },
+          data: { status: 'COMPLETED' },
+        });
+      }
+
       // Create Order
       const createdOrder = await tx.order.create({
         data: {
@@ -192,6 +214,7 @@ ordersRouter.post('/', requireAuth, async (req: AuthenticatedRequest, res: Respo
           buyerId: buyer.id,
           sellerId: item.sellerId,
           itemId: item.id,
+          offerId: validatedOfferId,
           itemPriceRupiah: totals.itemPrice,
           commissionRupiah: totals.commission,
           sellerPayoutRupiah: totals.sellerPayout,

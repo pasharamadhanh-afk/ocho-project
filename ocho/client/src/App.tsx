@@ -81,6 +81,7 @@ export const App: React.FC = () => {
   // Checkout state
   const [checkoutModalItem, setCheckoutModalItem] = useState<{
     item: ItemDetail;
+    offerId?: string | null;
     deliveryMethod: 'PICKUP' | 'DELIVERY';
     paymentMethod: 'QRIS' | 'COD';
   } | null>(null);
@@ -240,6 +241,7 @@ export const App: React.FC = () => {
         deliveryDate: checkoutModalItem.deliveryMethod === 'DELIVERY' ? checkoutDeliveryDate : null,
         buyerPhone: checkoutPhone.trim() || currentUser?.phone || '081234567890',
         notes: checkoutNotes.trim() || null,
+        offerId: checkoutModalItem.offerId || null,
       });
 
       setCreatedOrderResult(order);
@@ -329,6 +331,11 @@ export const App: React.FC = () => {
           <ItemDetailPage
             itemId={route.itemId}
             onBack={() => navigateTo('#/')}
+            currentUserId={currentUser?.id}
+            onRequireLogin={() => {
+              setAuthError('Silakan masuk dengan akun mahasiswa Unpad untuk mengajukan tawaran nego.');
+              setIsLoginModalOpen(true);
+            }}
             onCheckoutClick={(item, deliveryMethod, paymentMethod) => {
               if (!currentUser) {
                 setAuthError('Silakan masuk dengan akun mahasiswa Unpad untuk membeli barang.');
@@ -345,6 +352,18 @@ export const App: React.FC = () => {
           <OrdersPage
             onBackToHome={() => navigateTo('#/')}
             onViewItem={(id) => navigateTo(`#/items/${id}`)}
+            onCheckoutOffer={(item, offerId, offerPrice) => {
+              setCreatedOrderResult(null);
+              setCheckoutModalItem({
+                item: {
+                  ...item,
+                  priceRupiah: offerPrice,
+                },
+                offerId,
+                deliveryMethod: item.allowedDeliveryMethod === 'PICKUP_ONLY' ? 'PICKUP' : 'DELIVERY',
+                paymentMethod: 'QRIS',
+              });
+            }}
           />
         )}
 
